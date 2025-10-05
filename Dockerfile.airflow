@@ -1,0 +1,23 @@
+############################################################
+# Dockerfile.airflow
+# Image Airflow custom légère + dbt-postgres préinstallé
+# Objectif: éviter les installations à chaque démarrage
+############################################################
+
+FROM apache/airflow:2.7.0-python3.10
+
+# Empêche l'écriture interactive (pip)
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+# Copier requirements spécifiques (dbt + extras)
+COPY airflow/requirements.txt /requirements.txt
+
+RUN pip install --no-cache-dir -r /requirements.txt && \
+    airflow db check || true
+
+# Répertoires montés (dags, plugins, logs) seront fournis via docker-compose
+# L'utilisateur airflow existe déjà dans l'image officielle
+
+# Commande par défaut (webserver). Le scheduler sera dans un autre service.
+CMD ["bash", "-c", "airflow webserver"]

@@ -1,0 +1,32 @@
+name: 'weatherstack_analytics'
+version: '1.0.0'
+config-version: 2
+
+# Profil à utiliser
+profile: 'weatherstack_analytics'
+
+# Répertoires du projet
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+# Destination des fichiers compilés
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# Configuration des modèles par défaut
+models:
+  weatherstack_analytics:
+    # Staging (Silver) - Vues pour la rapidité
+    staging:
+      +materialized: view
+      +schema: staging
+    # Marts (Gold) - Tables pour les performances  
+    marts:
+      +materialized: table  
+      +schema: marts

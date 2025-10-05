@@ -1,0 +1,85 @@
+name: dbt-compile-minimal
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: analytics
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" \
+          --health-interval 10s \
+          --health-timeout 5s \
+          --health-retries 5
+    env:
+      DBT_POSTGRES_HOST: localhost
+      DBT_POSTGRES_USER: postgres
+      DBT_POSTGRES_PASSWORD: postgres
+      DBT_POSTGRES_PORT: 5432
+      DBT_POSTGRES_DB: analytics
+      DBT_POSTGRES_SCHEMA: dbt_default
+      PYTHONUNBUFFERED: 1
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+            python-version: '3.10'
+
+      - name: Install dbt-postgres
+        run: |
+          pip install --no-cache-dir dbt-postgres==1.6.0
+
+      - name: Wait for Postgres
+        run: |
+          for i in {1..15}; do
+            pg_isready -h localhost -U postgres && break
+            sleep 2
+          done
+
+      - name: Create schemas
+        run: |
+          psql postgresql://postgres:postgres@localhost:5432/analytics -c "CREATE SCHEMA IF NOT EXISTS raw;"
+          psql postgresql://postgres:postgres@localhost:5432/analytics -c "CREATE SCHEMA IF NOT EXISTS staging;"
+          psql postgresql://postgres:postgres@localhost:5432/analytics -c "CREATE SCHEMA IF NOT EXISTS marts;"
+
+      - name: Install dbt packages + compile
+        working-directory: dbt
+        run: |
+          dbt deps
+          dbt compile
+          echo "Compilation terminée (workflow minimal)." >> $GITHUB_STEP_SUMMARY
+
+      # --- Étapes optionnelles à réactiver plus tard ---
+      # - name: Full build (tests + run)
+      #   working-directory: dbt
+      #   run: dbt build --profiles-dir . --target dev
+      #
+      # - name: Generate docs
+      #   working-directory: dbt
+      #   run: dbt docs generate
+      #
+      # - name: Upload artifacts
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: dbt-docs
+      #     path: |
+      #       dbt/target/index.html
+      #       dbt/target/catalog.json
+      #       dbt/target/manifest.json
+      #       dbt/target/run_results.json

@@ -1,0 +1,80 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    restart: unless-stopped
+    env_file: [.env]
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres}" ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    networks: [data_net]
+
+  airflow-webserver:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    container_name: airflow-webserver
+    restart: unless-stopped
+    env_file: [.env]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./dbt:/usr/app/dbt
+      - ./dbt/dbt_profiles.yml:/home/airflow/.dbt/profiles.yml
+    command: bash -c "airflow db init && airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin || true && airflow webserver"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 6
+    networks: [data_net]
+
+  airflow-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    container_name: airflow-scheduler
+    restart: unless-stopped
+    env_file: [.env]
+    depends_on:
+      airflow-webserver:
+        condition: service_started
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./dbt:/usr/app/dbt
+      - ./dbt/dbt_profiles.yml:/home/airflow/.dbt/profiles.yml
+    command: bash -c "airflow scheduler"
+    networks: [data_net]
+
+  # (Optionnel) Workspace analytique dbt (exploration, tests manuels, docs). Non requis pour l'exécution des DAGs.
+  dbt-cli:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    container_name: dbt-cli
+    working_dir: /usr/app/dbt
+    entrypoint: ["bash", "-c", "dbt deps && echo 'Workspace dbt prêt. Utilisez: docker compose exec dbt-cli bash' && tail -f /dev/null"]
+    env_file: [.env]
+    volumes:
+      - ./dbt:/usr/app/dbt
+      - ./dbt/dbt_profiles.yml:/home/airflow/.dbt/profiles.yml
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [data_net]
+  # Supprimer ce service en mode 'prod' si l'orchestration Airflow + CI suffit
+
+networks:
+  data_net: {}

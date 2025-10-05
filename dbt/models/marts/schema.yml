@@ -1,0 +1,72 @@
+version: 2
+
+models:
+  - name: dim_locations
+    description: "Dimension des localisations (ville/pays) dérivée des données météo normalisées."
+    columns:
+      - name: location_key
+        description: "Clé substitut générée (hash ville + pays)."
+        tests:
+          - unique
+          - not_null
+      - name: city
+        description: "Nom normalisé de la ville (uppercase)."
+      - name: country
+        description: "Nom normalisé du pays (uppercase)."
+      - name: first_observation_date
+        description: "Premier timestamp d'observation disponible."
+      - name: last_observation_date
+        description: "Dernier timestamp d'observation disponible."
+      - name: total_observations
+        description: "Nombre total de lignes associées dans la table de faits."
+        tests:
+          - not_null
+
+  - name: fct_weather_observations
+    description: "Table de faits météo enrichie (catégories température/météo + granularité horaire)."
+    columns:
+      - name: observation_id
+        description: "Identifiant original de la ligne (raw.weather)."
+        tests:
+          - not_null
+      - name: location_key
+        description: "Clé substitut pour jointure avec dim_locations."
+        tests:
+          - not_null
+      - name: temperature
+        description: "Température brute mesurée (°C)."
+      - name: temperature_category
+        description: "Catégorie dérivée (Freezing/Cold/Mild/Warm/Hot)."
+        tests:
+          - accepted_values:
+              values: ["Freezing", "Cold", "Mild", "Warm", "Hot"]
+      - name: weather_category
+        description: "Catégorie simplifiée du type de temps (Clear/Rain/Cloudy/...)."
+      - name: humidity
+        description: "Humidité relative (%)."
+      - name: wind_speed
+        description: "Vitesse du vent (unité API)."
+      - name: pressure
+        description: "Pression atmosphérique (unité API)."
+      - name: extraction_date
+        description: "Date (jour) d'extraction normalisée."
+      - name: extraction_hour
+        description: "Heure d'extraction (0-23)."
+      - name: day_of_week
+        description: "Jour de la semaine (0=Dimanche)."
+      - name: extracted_at
+        description: "Timestamp d'extraction original."
+      - name: data_interval_start
+        description: "Intervalle logique Airflow (début)."
+
+exposures:
+  - name: weather_analytics_dashboard
+    type: dashboard
+    maturity: low
+    owner:
+      name: Analytics Demo
+      email: analytics@example.com
+    description: "Exposition fictive pour illustrer la traçabilité des modèles vers un dashboard analytique météo."
+    depends_on:
+      - ref('fct_weather_observations')
+      - ref('dim_locations')

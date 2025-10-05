@@ -1,0 +1,15 @@
+weatherstack_analytics:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      # Fallback sur les valeurs par défaut si les variables d'env DBT_POSTGRES_* ne sont pas définies.
+      # Le hostname du service docker-compose postgres est "postgres" (résolution DNS interne réseau). 
+      host: "{{ env_var('DBT_POSTGRES_HOST', 'postgres') }}"
+      user: "{{ env_var('DBT_POSTGRES_USER', env_var('POSTGRES_USER', 'postgres')) }}"
+      password: "{{ env_var('DBT_POSTGRES_PASSWORD', env_var('POSTGRES_PASSWORD', 'postgres')) }}"
+      port: "{{ env_var('DBT_POSTGRES_PORT', '5432') | as_number }}"
+      dbname: "{{ env_var('DBT_POSTGRES_DB', env_var('POSTGRES_DB', 'postgres')) }}"
+      schema: "dbt_default"
+      threads: 4
+      keepalives_idle: 0
