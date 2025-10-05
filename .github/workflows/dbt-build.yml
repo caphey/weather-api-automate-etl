@@ -19,10 +19,7 @@ jobs:
           POSTGRES_DB: analytics
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U postgres" \
-          --health-interval 10s \
-          --health-timeout 5s \
-          --health-retries 5
+          --health-cmd "pg_isready -U postgres" --health-interval 10s --health-timeout 5s --health-retries 5
     env:
       DBT_POSTGRES_HOST: localhost
       DBT_POSTGRES_USER: postgres
@@ -39,30 +36,40 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-            python-version: '3.10'
+          python-version: '3.10'
 
-      - name: Install dbt-postgres
+      - name: Install dbt packages
         run: |
-          pip install --no-cache-dir dbt-postgres==1.6.0
+          pip install --upgrade pip
+          # Aligner dbt-core et adapter (1.6.x). Ajouter psycopg2-binary pour psql libs.
+          pip install --no-cache-dir dbt-core==1.6.0 dbt-postgres==1.6.0 psycopg2-binary
 
-      - name: Wait for Postgres
+      - name: Wait for Postgres (robuste)
         run: |
-          for i in {1..15}; do
-            pg_isready -h localhost -U postgres && break
+          echo "Attente disponibilité Postgres..."
+          for i in {1..30}; do
+            if pg_isready -h localhost -U postgres >/dev/null 2>&1; then
+              echo "Postgres OK"; break; fi
             sleep 2
           done
+          pg_isready -h localhost -U postgres
+          # Validation de connexion
+          PGPASSWORD=postgres psql -h localhost -U postgres -d analytics -c 'select 1;' || (echo 'Echec connexion DB' && exit 1)
 
       - name: Create schemas
         run: |
-          psql postgresql://postgres:postgres@localhost:5432/analytics -c "CREATE SCHEMA IF NOT EXISTS raw;"
-          psql postgresql://postgres:postgres@localhost:5432/analytics -c "CREATE SCHEMA IF NOT EXISTS staging;"
-          psql postgresql://postgres:postgres@localhost:5432/analytics -c "CREATE SCHEMA IF NOT EXISTS marts;"
+          for schema in raw staging marts; do
+            PGPASSWORD=postgres psql -h localhost -U postgres -d analytics -c "CREATE SCHEMA IF NOT EXISTS $schema;"
+          done
 
       - name: Install dbt packages + compile
         working-directory: dbt
+        env:
+          DBT_PROFILES_DIR: .
         run: |
           dbt deps
-          dbt compile
+          dbt debug --profiles-dir . --target dev
+          dbt compile --profiles-dir . --target dev
           echo "Compilation terminée (workflow minimal)." >> $GITHUB_STEP_SUMMARY
 
       # --- Étapes optionnelles à réactiver plus tard ---
